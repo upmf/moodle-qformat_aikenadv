@@ -33,6 +33,7 @@ defined('MOODLE_INTERNAL') || die();
  *
  * The format looks like this:
  *
+ * 1.Name
  * Question text
  * A) Choice #1
  * B) Choice #2
@@ -41,7 +42,7 @@ defined('MOODLE_INTERNAL') || die();
  * ANSWER: B
  *
  * That is,
- *  + question text all one one line.
+ *  
  *  + then a number of choices, one to a line. Each line must comprise a letter,
  *    then ')' or '.', then a space, then the choice text.
  *  + Then a line of the form 'ANSWER: X' to indicate the correct answer.
@@ -54,18 +55,18 @@ defined('MOODLE_INTERNAL') || die();
  */
 class qformat_aikenadv extends qformat_default {
 
-    public function provide_import() {
-        return true;
-    }
+   public function provide_import() {
+    return true;
+  }
 
     public function readquestions($lines) {
         $questions = array();
-        $question = $this->defaultquestion();
-        $endchar = chr(13);
+        $num_ans = -1;  // no answers so far
+        $num_choices = -1; // no choices so far
+        $endchar = chr(13); 
         foreach ($lines as $line) {
-            $stp = strpos($line, $endchar, 0);
-            $newlines = explode($endchar, $line);
-            $foundQ = 0;
+            $stp = strpos($line,$endchar,0);
+            $newlines = explode($endchar,$line);
             $linescount = count($newlines);
             for ($i=0; $i < $linescount; $i++) {
                 $nowline = trim($newlines[$i]);
@@ -74,72 +75,70 @@ class qformat_aikenadv extends qformat_default {
                 if (mb_strlen($nowline) < 2) {
                     continue;
                 }
-                if (preg_match('/^[A-Z1-9][).][ \t]/', $nowline)) {
+
+                if (preg_match('/^[A-Z][).][ \t]/', $nowline)) {
                     // A choice. Trim off the label and space, then save
                     $question->answer[] = $this->text_field(
                             htmlspecialchars(trim(mb_substr($nowline, 2)), ENT_NOQUOTES));
                     $question->fraction[] = 0;
                     $question->feedback[] = $this->text_field('');
-                } else if (preg_match('/^ANSWER:/', $nowline)) {
+                    $num_choices++;
+                } elseif ((preg_match('/^ANSWER/', $nowline))||(preg_match('/^'.get_string('answer','qformat_aikenadv').'/', $nowline))) {
                     // The line that indicates the correct answer. This question is finised.
-                    $ans = trim(substr($nowline, strpos($nowline, ':') + 1));
-                    $ans = substr($ans, 0, 1);
-                    // We want to map A to 0, B to 1, etc.
-                    if (preg_match('/[A-Z]/',$ans)) {
-                        $rightans = ord($ans) - ord('A');
-                    } elseif (preg_match('/[1-9]/',$ans)) {
-                        $rightans = ord($ans) - ord('1');
+
+                    $ans =  strtoupper(trim(preg_replace('/^[^:]*:/','',$nowline)));
+                    if ($ans == "FALSE") {
+                        $question->qtype = TRUEFALSE;
+                        $question->single = 1;
+                        $question->answer = 0;
+                        $num_ans = 1;
+                        $question->fraction = 1;
+                        $question->feedbacktrue = '';
+                        $question->feedbackfalse = '';
+                        $question->correctanswer = 0;
+                    } elseif ($ans == "TRUE") {
+                        $question->qtype = TRUEFALSE;
+                        $question->single = 1;
+                        $question->answer = 1;
+                        $question->correctanswer = 0;
+                        $num_ans = 1;
+                        $question->feedbacktrue = '';
+                        $question->feedbackfalse = '';
+                    }else{
+                            $mult_ans = preg_split("[\s,]+", $ans,NULL,PREG_SPLIT_NO_EMPTY);
+                            $num_ans = count($mult_ans);
+
+                            for ($j=0;$j<$num_ans;$j++) {
+                                $rightans = ord($mult_ans[$j]) - ord('A');
+                                $question->fraction[$rightans] = 1.0/$num_ans;         
+                             }
+                             $question->single = $num_ans == 1; 
+                             $questions[] = $question;
+                             // Clear array for next question set
+                             $question = $this->defaultquestion();
+                             continue;           
                     }
-                    //$rightans = ord($ans) - ord('A');
-                    $question->fraction[$rightans] = 1;
-                    $questions[] = $question;
-
-                    // Clear array for next question set
+                } elseif (preg_match('/^\s*[A-Z]*[0-9]+[.]\s*/', $nowline)) {
+                        //clear for new question
                     $question = $this->defaultquestion();
-                    continue;
-                } else if (preg_match('/^'.get_string('answer','qformat_aikenadv').':/', $nowline)) {
-                    // The line that indicates the correct answer. This question is finised.
-                    $ans = trim(mb_substr($nowline, mb_strpos($nowline, ':') + 1));
-                    //$ans = mb_substr($ans, 0, 1);
-                    // We want to map A to 0, B to 1, etc.
-                    if (preg_match('/['.get_string('lettersrange','qformat_aikenadv').']/',$ans)) {
-                        $rightans = ord($ans) - ord(get_string('startletter','qformat_aikenadv'));
-                    } elseif (preg_match('/[1-9]/',$ans)) {
-                        $rightans = ord($ans) - ord('1');
-                    }
-                    //$rightans = ord($ans) - ord('A');
-                    $question->fraction[$rightans] = 1;
-                    $questions[] = $question;
-
-                    // Clear array for next question set
-                    $question = $this->defaultquestion();
-                    continue;
-
-                } else if (preg_match('/^(NUMBERING|'.get_string('numbering','qformat_aikenadv').'):/', $nowline)) {
-                    $type = trim(mb_substr($nowline, mb_strpos($nowline, ':') + 1));
-                    $type = trim(mb_substr($type, 0, 4));
-                    $question->answernumbering = $type;
-                } else {
-                    // Must be the first line of a new question, since no recognised prefix.
-                    $question->qtype = 'multichoice';
+                   
+                    // get rid of any question numbers
                     $question->name = $this->create_default_question_name($nowline, get_string('questionname', 'question'));
-                    $question->questiontext = htmlspecialchars(trim($nowline), ENT_NOQUOTES);
-                    $question->questiontextformat = FORMAT_HTML;
-                    $question->generalfeedback = '';
-                    $question->generalfeedbackformat = FORMAT_HTML;
-                    $question->single = 1;
-                    $question->answer = array();
-                    $question->fraction = array();
-                    $question->feedback = array();
-                    $question->correctfeedback = $this->text_field('');
-                    $question->partiallycorrectfeedback = $this->text_field('');
-                    $question->incorrectfeedback = $this->text_field('');
+                    $question->questiontext=  htmlspecialchars(preg_replace('/^\s*[A-Z]*[0-9]+[.]\s*/','',$nowline), ENT_NOQUOTES);
+                    $question->qtype = 'multichoice';
+                    $num_ans = 0;  // at least one question is real
+                    $num_choices = -1;  // number of choices - 1
+                } elseif (($num_ans == 0)&& ($num_choices < 0)){
+                       //Must be part of a question or choice since no leader
+                        $question->questiontext .= htmlspecialchars(trim($nowline), ENT_NOQUOTES);
+                }elseif ($num_ans > 0) {
+                        continue;
                 }
-            }
+            } 
         }
         return $questions;
     }
-
+    
     protected function text_field($text) {
         return array(
             'text' => htmlspecialchars(trim($text), ENT_NOQUOTES),
@@ -148,10 +147,10 @@ class qformat_aikenadv extends qformat_default {
         );
     }
 
-    public function readquestion($lines) {
+    function readquestion($lines) {
         //this is no longer needed but might still be called by default.php
         return;
     }
 }
 
-
+?>
