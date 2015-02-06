@@ -93,8 +93,8 @@ class qformat_aikenadv extends qformat_default {
                         $question->answer = 0;
                         $num_ans = 1;
                         $question->fraction = 1;
-                        $question->feedbacktrue = '';
-                        $question->feedbackfalse = '';
+                        $question->feedbacktrue = $this->text_field('');
+                        $question->feedbackfalse = $this->text_field('');
                         $question->correctanswer = 0;
                     } elseif ($ans == "TRUE") {
                         $question->qtype = TRUEFALSE;
@@ -102,10 +102,10 @@ class qformat_aikenadv extends qformat_default {
                         $question->answer = 1;
                         $question->correctanswer = 0;
                         $num_ans = 1;
-                        $question->feedbacktrue = '';
-                        $question->feedbackfalse = '';
+                        $question->feedbacktrue = $this->text_field('');
+                        $question->feedbackfalse = $this->text_field('');
                     }else{
-                            $mult_ans = preg_split("[\s,]+", $ans,NULL,PREG_SPLIT_NO_EMPTY);
+			    $mult_ans = preg_split('/[\s,]+/', $ans,NULL,PREG_SPLIT_NO_EMPTY);
                             $num_ans = count($mult_ans);
 
                             for ($j=0;$j<$num_ans;$j++) {
